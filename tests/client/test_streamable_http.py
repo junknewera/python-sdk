@@ -1197,6 +1197,29 @@ async def test_get_stream_gives_up_without_retrying_when_the_endpoint_redirects_
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize("status", [401, 403, 405])
+async def test_get_stream_gives_up_without_retrying_when_the_server_refuses_it(status: int) -> None:
+    """SDK-defined: a 401, 403 or 405 answer to the standalone GET would come back on every retry
+    within the session, so the transport sends one GET and stops instead of waiting out a
+    reconnection delay and sending it again."""
+    gets: list[str] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        gets.append(request.method)
+        return httpx2.Response(status)
+
+    transport = StreamableHTTPTransport("http://test/mcp")
+    transport.session_id = "session-1"
+    send, receive = create_context_streams[SessionMessage | Exception](1)
+    with anyio.fail_after(5):
+        async with httpx2.AsyncClient(transport=httpx2.MockTransport(handler)) as http:
+            await transport.handle_get_stream(http, send)
+    assert gets == ["GET"]
+    send.close()
+    receive.close()
+
+
+@pytest.mark.anyio
 async def test_resumption_redirected_elsewhere_resolves_that_request_with_an_error() -> None:
     """SDK-defined: a resumption GET answered with a redirect to another origin is not followed;
     the resumed request is resolved with an error naming the location rather than left waiting."""

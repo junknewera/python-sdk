@@ -243,6 +243,10 @@ class StreamableHTTPTransport:
                         # The same GET would be redirected again, so retrying cannot help.
                         logger.warning(f"GET stream not opened: {redirect}")
                         return
+                    if event_source.response.status_code in (401, 403, 405):
+                        # The server refused the GET stream for this session, so retrying cannot help.
+                        logger.debug(f"GET stream not opened: server returned {event_source.response.status_code}")
+                        return
                     event_source.response.raise_for_status()
                     logger.debug("GET SSE connection established")
 
